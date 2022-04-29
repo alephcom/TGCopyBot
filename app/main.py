@@ -2,6 +2,7 @@ from dotenv import load_dotenv, find_dotenv
 from os import getenv
 from sys import exit
 from telegram.client import Telegram
+import argparse
 
 load_dotenv(find_dotenv())
 
@@ -32,6 +33,11 @@ tg = Telegram(
           '@type': getenv("PROXY_TYPE"),
     },
 )
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--messages", type=int, default=0, help="Number of messages to retrieve from history")
+args = parser.parse_args()
+# Adding optional argument
 
 ###############
 # App methods #
@@ -70,7 +76,56 @@ def new_message_handler(update):
         copy_message(message_chat_id, message_id)
 
 
+def process_source_chat(tg,chat_id,history_limit):
+    message_list = []
+
+    limit = 1
+    from_message_id = 0
+    offset = 0
+    only_local = False
+
+    c = 0;
+
+    print("\nRetrieving Chat History from: " + str(chat_id))
+
+    while c < history_limit:
+        r = tg.get_chat_history(
+            chat_id=chat_id,
+            limit=limit,
+            from_message_id=from_message_id,
+            offset=offset,
+            only_local=only_local,
+        )
+
+        r.wait()
+        print("\nPrinting Chat History")
+        print("Total: " + str(r.update['total_count']))
+#        print(r.update)
+        messages = r.update['messages']
+        for m in messages:
+            print('Message ID: ' + str(from_message_id))
+            print(m['content']['@type'])
+            from_message_id = m['id']
+            if m['content']['@type'] == 'messageText':
+                print(m['content']['text']['text'])
+                message_list.append(m)
+#                copy_message(m['chat_id'], m['id'])
+            if m['content']['@type'] == 'messageAudio':
+                message_list.append(m)
+#                copy_message(m['chat_id'], m['id'])
+
+                #stats_data[message['id']] = message['content']['text']['text']
+            #from_message_id = message['id']
+#            c = c+1;
+        c = c+1;
+
+    print('\nDone retrieving history')
+    message_list.reverse()
+    for m in message_list:
+        copy_message(m['chat_id'], m['id'])
+
 if __name__ == "__main__":
+
     tg.login()
     result = tg.get_chats()
 
@@ -89,6 +144,16 @@ if __name__ == "__main__":
     else:
         src_chat = int(src_chat)
         dst_chat = int(dst_chat)
-
+ 
     tg.add_message_handler(new_message_handler)
+
+    if (int(args.messages) > 0):
+        print (args.messages)
+        process_source_chat(
+            tg=tg,
+            chat_id=src_chat,
+            history_limit=int(args.messages)
+        )
+
     tg.idle()
+
